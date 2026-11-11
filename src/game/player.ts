@@ -1,5 +1,6 @@
 import { resolveCircle } from './collide';
 import type { AABB } from './layout';
+import { planarWish } from './rules';
 import { TUNE } from './tune';
 
 /** On-foot body. Chapter 2 can reuse this without the truck. */
@@ -40,8 +41,9 @@ export class FootMover {
       return;
     }
     const speed = this.wantCrouch ? TUNE.crouch : sprint ? TUNE.sprint : TUNE.walk;
-    const wishX = (Math.sin(this.yaw) * moveY + Math.cos(this.yaw) * moveX) * speed;
-    const wishZ = (Math.cos(this.yaw) * moveY - Math.sin(this.yaw) * moveX) * speed;
+    const wish = planarWish(this.yaw, moveX, moveY);
+    const wishX = wish.x * speed;
+    const wishZ = wish.z * speed;
     const k = icy ? 2.4 : 16;
     this.vx += (wishX - this.vx) * Math.min(1, dt * k);
     this.vz += (wishZ - this.vz) * Math.min(1, dt * k);

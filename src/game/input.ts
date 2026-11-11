@@ -9,6 +9,7 @@ export interface Snapshot {
   crouch: boolean;
   jump: boolean;
   interact: boolean;
+  interactPressed: boolean;
   fire: boolean;
   melee: boolean;
   reload: boolean;
@@ -159,6 +160,7 @@ export class Input {
       crouch: this.crouchToggle || this.down.has('crouchHold'),
       jump: take('jump'),
       interact: this.down.has('interact') || this.padInteract,
+      interactPressed: take('interact'),
       fire: take('fire'),
       melee: take('melee'),
       reload: take('reload'),
@@ -172,6 +174,7 @@ export class Input {
 
   private readPad(dt: number, sens: number, invert: number): { x: number; y: number; lookX: number; lookY: number } {
     const out = { x: 0, y: 0, lookX: 0, lookY: 0 };
+    const heldInteract = this.padInteract;
     this.padInteract = false;
     this.padSprint = false;
     const pads = navigator.getGamepads?.();
@@ -218,7 +221,9 @@ export class Input {
       if (pressed) now.add(name);
     }
     const trigger = pad.buttons[6];
-    this.padInteract = !!trigger && (trigger.pressed || trigger.value > 0.45);
+    const nextInteract = !!trigger && (trigger.pressed || trigger.value > 0.45);
+    if (nextInteract && !heldInteract) this.edges.add('interact');
+    this.padInteract = nextInteract;
     this.padSprint = now.has('sprint');
     for (const name of now) {
       if (!this.padWas.has(name) && name !== 'sprint') this.edges.add(name);
@@ -234,7 +239,7 @@ export class Input {
     if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) return;
     if (event.code === 'Space' || event.code.startsWith('Arrow')) event.preventDefault();
     if (event.repeat) return;
-    if (action === 'jump' || action === 'reload' || action === 'flashlight' || action === 'melee' || action === 'pause' || action === 'slot1' || action === 'slot2' || action === 'crouchToggle') {
+    if (action === 'jump' || action === 'reload' || action === 'flashlight' || action === 'melee' || action === 'pause' || action === 'slot1' || action === 'slot2' || action === 'crouchToggle' || action === 'interact') {
       this.edges.add(action);
     }
     this.down.add(action);
@@ -377,8 +382,11 @@ export class Input {
         event.preventDefault();
         event.stopPropagation();
         this.ignoreMouseUntil = performance.now() + 700;
-        if (action === 'sprint' || action === 'interact') this.down.add(action);
-        else this.edges.add(action);
+        if (action === 'sprint') this.down.add(action);
+        else if (action === 'interact') {
+          this.down.add(action);
+          this.edges.add(action);
+        } else this.edges.add(action);
         button.classList.add('on');
       }, { passive: false });
       const release = (event: Event) => {

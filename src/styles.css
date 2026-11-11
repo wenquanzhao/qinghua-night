@@ -181,11 +181,13 @@ button.act:disabled {
 }
 .hold {
   display: block;
-  width: 140px;
-  height: 2px;
+  width: 168px;
+  height: 6px;
   margin: 8px auto 0;
   background: #2a3340;
+  border: 1px solid #8ea0b4;
 }
+.hold[hidden] { display: none; }
 .hold i { display: block; height: 100%; width: 0; background: var(--accent); }
 
 .sub, .hint {

@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { Fever } from '../actors';
 import { LAYOUT, worldSolids, fenceSolids, staticSolids, type AABB } from '../layout';
 import { FootMover } from '../player';
-import { environmentFail, impactKind } from '../rules';
+import { environmentFail, impactKind, steerYaw } from '../rules';
 import { Truck } from '../truck';
 import { TUNE } from '../tune';
 import type { Chapter, Host, Objective, Report } from '../types';
@@ -22,6 +22,8 @@ interface Spot {
   pos: () => { x: number; z: number };
   label: string;
   time: number;
+  /** Single press. World searches and doors stay hold-to-use. */
+  tap?: boolean;
   ok: () => boolean;
   run: () => void;
 }
@@ -194,7 +196,7 @@ export class HighwayChapter implements Chapter {
       }
     }
     this.separateEnemies();
-    this.updateInteract(dt, snap.interact);
+    this.updateInteract(dt, snap.interact, snap.interactPressed);
     this.handleGear(snap);
     this.tickReload(dt);
     this.checkWorld();
@@ -202,7 +204,7 @@ export class HighwayChapter implements Chapter {
     if (this.foot.z > 250 || this.truck.z > 250) this.mark('road');
     if (!this.driveHint && this.riding) {
       this.driveHint = true;
-      this.host.hint('W 前进 · A D 转向 · 按住互动下车', 4.5);
+      this.host.hint('W 前进 · A D 转向 · 按 E 下车', 4.5);
     }
     this.visuals(dt);
   }
@@ -375,13 +377,35 @@ export class HighwayChapter implements Chapter {
     this.coat.aggro = true;
   }
 
-  private updateInteract(dt: number, held: boolean): void {
-    const spot = this.pickSpot();
-    if (!spot || !held) {
+  private updateInteract(dt: number, held: boolean, pressed: boolean): void {
+    if (this.riding && !this.stalling && Math.abs(this.truck.speed) >= 1.35) {
       this.hold = 0;
-      this.holdId = spot?.id ?? null;
-      this.prompt = spot?.label ?? '';
-      this.promptHold = spot ? 0 : -1;
+      this.holdId = null;
+      this.prompt = held || pressed ? '减速后按 E 下车' : '';
+      this.promptHold = -1;
+      return;
+    }
+    const spot = this.pickSpot();
+    if (!spot) {
+      this.hold = 0;
+      this.holdId = null;
+      this.prompt = '';
+      this.promptHold = -1;
+      return;
+    }
+    if (spot.tap) {
+      this.hold = 0;
+      this.holdId = spot.id;
+      this.prompt = spot.label;
+      this.promptHold = -1;
+      if (pressed) spot.run();
+      return;
+    }
+    if (!held) {
+      this.hold = 0;
+      this.holdId = spot.id;
+      this.prompt = spot.label;
+      this.promptHold = 0;
       return;
     }
     if (this.holdId !== spot.id) {
@@ -428,8 +452,9 @@ export class HighwayChapter implements Chapter {
       return [{
         id: 'exit',
         pos: () => ({ x: truck.x, z: truck.z }),
-        label: '按住互动 · 下车',
-        time: 0.32,
+        label: '按 E 下车',
+        time: 0,
+        tap: true,
         ok: () => Math.abs(truck.speed) < 1.35 && !this.stalling,
         run: () => this.exitTruck(),
       }];
@@ -438,15 +463,16 @@ export class HighwayChapter implements Chapter {
       {
         id: 'enter',
         pos: () => truck.door(),
-        label: '按住互动 · 上车',
-        time: 0.4,
+        label: '按 E 上车',
+        time: 0,
+        tap: true,
         ok: () => truck.drivable,
         run: () => this.enterTruck(),
       },
       {
         id: 'loot-truck',
         pos: () => truck.bed(),
-        label: '按住互动 · 搜寻车里',
+        label: '按住 E · 搜寻车里',
         time: 0.7,
         ok: () => !this.lootedTruck,
         run: () => this.lootTruck(),
@@ -454,7 +480,7 @@ export class HighwayChapter implements Chapter {
       {
         id: 'loot-police',
         pos: () => ({ x: LAYOUT.policeLoot.x, z: LAYOUT.policeLoot.z }),
-        label: '按住互动 · 搜寻警车',
+        label: '按住 E · 搜寻警车',
         time: 0.75,
         ok: () => !this.lootedPolice,
         run: () => this.lootPolice(),
@@ -462,7 +488,7 @@ export class HighwayChapter implements Chapter {
       {
         id: 'gate',
         pos: () => ({ x: 0, z: LAYOUT.gateZ - 1.3 }),
-        label: this.hasBar ? '按住互动 · 用撬棍扳门' : '按住互动 · 扳开铁门',
+        label: this.hasBar ? '按住 E · 用撬棍扳门' : '按住 E · 扳开铁门',
         time: this.hasBar ? 1.05 : 2.05,
         ok: () => !this.gateOpen && this.foot.z > 255,
         run: () => this.openGate(),
@@ -470,7 +496,7 @@ export class HighwayChapter implements Chapter {
       {
         id: 'side',
         pos: () => ({ x: LAYOUT.sideDoor.x, z: LAYOUT.sideDoor.z - 1.2 }),
-        label: '按住互动 · 打开检修门',
+        label: '按住 E · 打开检修门',
         time: this.hasBar ? 0.75 : 1.2,
         ok: () => !this.sideOpen && this.foot.z > 255,
         run: () => this.openSide(),
@@ -491,7 +517,7 @@ export class HighwayChapter implements Chapter {
     this.cab = 0;
     if (!this.footHint) {
       this.footHint = true;
-      this.host.hint('WASD 移动 · 按住互动搜寻 · F 头灯', 4.2);
+      this.host.hint('WASD 移动 · 按住 E 搜寻 · F 头灯', 4.2);
     }
   }
 
@@ -721,10 +747,10 @@ export class HighwayChapter implements Chapter {
 
   private applyLook(lookX: number, lookY: number): void {
     if (this.riding) {
-      this.cab = clamp(this.cab + lookX, -1.15, 1.15);
+      this.cab = clamp(steerYaw(this.cab, lookX), -1.15, 1.15);
       this.pitch = clamp(this.pitch + lookY, -0.55, 0.42);
     } else {
-      this.foot.yaw += lookX;
+      this.foot.yaw = steerYaw(this.foot.yaw, lookX);
       this.foot.pitch = clamp(this.foot.pitch + lookY, -1.15, 1.15);
     }
   }
@@ -895,13 +921,24 @@ export class HighwayChapter implements Chapter {
     river.rotation.x = -Math.PI / 2;
     river.position.set(48, -1.5, 140);
     tagMode(river, field, 4);
-    this.root.add(snow, road, ice, ditch, creek, river);
+    const shoulderL = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 280), this.lit);
+    paint(shoulderL.geometry, white);
+    shoulderL.rotation.x = -Math.PI / 2;
+    shoulderL.position.set(-5.05, 0.045, 130);
+    tagMode(shoulderL, field, 2);
+    const shoulderR = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 280), this.lit);
+    paint(shoulderR.geometry, white);
+    shoulderR.rotation.x = -Math.PI / 2;
+    shoulderR.position.set(5.05, 0.045, 130);
+    tagMode(shoulderR, field, 2);
+    this.root.add(snow, road, shoulderL, shoulderR, ice, ditch, creek, river);
 
     for (const box of staticSolids()) this.addSolid(box);
     for (const box of fenceSolids(true, true)) this.addSolid(box);
     this.addDoors();
     this.addSign(['南岸变电站', '4 公里'], LAYOUT.sign.x, LAYOUT.sign.z, 0.08);
     this.addSign(['南岸变电站'], 0, LAYOUT.gateZ - 0.8, 0);
+    this.addRoadDressing();
     this.addTrees();
     this.addPoles();
     this.addFarBank();
@@ -946,21 +983,40 @@ export class HighwayChapter implements Chapter {
     const d = box.maxZ - box.minZ;
     const group = new THREE.Group();
     group.position.set((box.minX + box.maxX) / 2, 0, (box.minZ + box.maxZ) / 2);
+    const seed = Math.sin(box.minZ * 12.3 + box.minX);
+    group.rotation.y = seed * 0.2;
+    group.rotation.z = seed * 0.03;
     const paintColor = police ? 0xd5dbe2 : 0x2c3138;
-    const body = meshBox(this.lit, w * 0.92, 0.48, d * 0.92, paintColor);
-    body.position.y = 0.5;
-    const cab = meshBox(this.lit, w * 0.78, 0.38, d * 0.4, police ? 0xc5ccd4 : 0x24282e);
-    cab.position.set(0, 0.88, -d * 0.02);
-    const cap = meshBox(this.lit, w * 0.7, 0.06, d * 0.55, 0xd5dde6);
-    cap.position.y = police ? 1.16 : 1.12;
-    group.add(body, cab, cap);
+    const body = meshBox(this.lit, w * 0.88, 0.38, d * 0.86, paintColor);
+    body.position.set(0, 0.46, 0);
+    const cabin = meshBox(this.lit, w * 0.7, 0.34, d * 0.38, police ? 0xb7c0c8 : 0x1c2026);
+    cabin.position.set(0, 0.78, -d * 0.08);
+    const glass = meshBox(this.lit, w * 0.6, 0.18, 0.04, 0x1a2830);
+    glass.position.set(0, 0.84, d * 0.1);
+    const hood = meshBox(this.lit, w * 0.82, 0.1, d * 0.26, paintColor);
+    hood.position.set(0, 0.58, d * 0.28);
+    const snowCap = meshBox(this.lit, w * 0.64, 0.07, d * 0.34, 0xe7eef4);
+    snowCap.position.set(0, 0.98, -d * 0.06);
+    const drift = meshBox(this.lit, w * 1.02, 0.14, d * 0.42, 0xd7e0e8);
+    drift.position.set(seed * 0.12, 0.07, -d * 0.18);
+    group.add(body, cabin, glass, hood, snowCap, drift);
+    const wheelGeo = new THREE.CylinderGeometry(0.18, 0.18, 0.14, 8);
+    paint(wheelGeo, new THREE.Color(0x121212));
+    for (const wx of [-w * 0.38, w * 0.38]) {
+      for (const wz of [-d * 0.3, d * 0.3]) {
+        const wheel = new THREE.Mesh(wheelGeo, this.lit);
+        wheel.rotation.z = Math.PI / 2;
+        wheel.position.set(wx, 0.18, wz);
+        group.add(wheel);
+      }
+    }
     if (police) {
       this.policeRed = emissiveMaterial(0xff2a2a, 2);
       this.policeBlue = emissiveMaterial(0x2a4bff, 2);
       const red = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.08, 0.1), this.policeRed);
       const blue = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.08, 0.1), this.policeBlue);
-      red.position.set(-0.18, 1.18, 0);
-      blue.position.set(0.18, 1.18, 0);
+      red.position.set(-0.18, 1.08, -d * 0.08);
+      blue.position.set(0.18, 1.08, -d * 0.08);
       group.add(red, blue);
     }
     this.root.add(group);
@@ -995,15 +1051,19 @@ export class HighwayChapter implements Chapter {
 
   private addSign(lines: string[], x: number, z: number, tilt: number): void {
     const tex = this.makeSign(lines);
-    const face = Math.abs(x) < 0.2 ? Math.PI : Math.PI + Math.sign(x) * 0.28;
-    const side = Math.abs(x) < 0.2 ? -1 : Math.sign(x);
+    const towardRoad = Math.abs(x) < 0.2 ? 0 : -Math.sign(x);
     const board = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 1.25), signMaterial(this.host.night, tex));
     paint(board.geometry, new THREE.Color(0xffffff));
-    board.position.set(x + side * 1.2, 1.7, z);
-    board.rotation.set(0, face, tilt);
-    const pole = meshBox(this.lit, 0.08, 1.7, 0.08, 0x33383e);
-    pole.position.set(x, 0.85, z);
-    this.root.add(board, pole);
+    board.position.set(x + towardRoad * 1.2, 2.35, z);
+    board.rotation.set(0, Math.PI, tilt);
+    const cap = meshBox(this.lit, 2.5, 0.08, 0.1, 0xe7eef4);
+    cap.position.set(0, 0.66, 0.02);
+    board.add(cap);
+    const pole = meshBox(this.lit, 0.1, 2.4, 0.1, 0x33383e);
+    pole.position.set(x, 1.2, z);
+    const arm = meshBox(this.lit, 1.2, 0.07, 0.07, 0x33383e);
+    arm.position.set(x + towardRoad * 0.6, 2.35, z);
+    this.root.add(board, pole, arm);
   }
 
   private makeSign(lines: string[]): THREE.CanvasTexture {
@@ -1050,6 +1110,31 @@ export class HighwayChapter implements Chapter {
     tex.colorSpace = THREE.SRGBColorSpace;
     this.textures.push(tex);
     return tex;
+  }
+
+  private addRoadDressing(): void {
+    const clumpGeo = new THREE.BoxGeometry(2.2, 0.18, 2.4);
+    paint(clumpGeo, new THREE.Color(0xe8eef3));
+    const clumps = new THREE.InstancedMesh(clumpGeo, this.lit, 56);
+    const dummy = new THREE.Object3D();
+    const rand = mulberry(19);
+    let n = 0;
+    for (let z = 4; z < 250 && n < 56; z += 8.5) {
+      for (const side of [-1, 1]) {
+        if (n >= 56) break;
+        if (side < 0 && z > 124 && z < 150) continue;
+        const jitter = (rand() - 0.5) * 2.2;
+        dummy.position.set(side * (4.35 + rand() * 0.85), 0.1, z + jitter);
+        dummy.rotation.set((rand() - 0.5) * 0.15, rand() * Math.PI, (rand() - 0.5) * 0.12);
+        dummy.scale.set(0.7 + rand() * 0.8, 0.8 + rand() * 1.6, 0.65 + rand() * 0.7);
+        dummy.updateMatrix();
+        clumps.setMatrixAt(n, dummy.matrix);
+        n += 1;
+      }
+    }
+    clumps.count = n;
+    clumps.instanceMatrix.needsUpdate = true;
+    this.root.add(clumps);
   }
 
   private addTrees(): void {

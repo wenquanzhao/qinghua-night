@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { createBeam, emissiveMaterial, meshBox, paint } from '../render/night';
 import { resolveCircle } from './collide';
 import type { AABB } from './layout';
+import { steerYaw } from './rules';
 import { TUNE } from './tune';
 
 export class Truck {
@@ -107,7 +108,7 @@ export class Truck {
       }
       this.speed = Math.max(-3, Math.min(TUNE.truckMax, this.speed));
       const turn = (0.4 + 0.9 * Math.min(1, Math.abs(this.speed) / 5)) * Math.sign(this.speed || 1);
-      this.yaw += steer * turn * dt;
+      this.yaw = steerYaw(this.yaw, steer * turn * dt);
     } else {
       this.speed *= Math.max(0, 1 - 2.4 * dt);
       if (Math.abs(this.speed) < 0.05) this.speed = 0;

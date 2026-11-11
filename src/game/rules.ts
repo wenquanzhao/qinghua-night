@@ -36,6 +36,26 @@ export function formatClock(elapsed: number): string {
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
 }
 
+/**
+ * Yaw 0 faces +Z. In this right-handed frame that view's right is world -X.
+ * moveX > 0 is strafe right (D). moveY > 0 is forward (W).
+ */
+export function planarWish(yaw: number, moveX: number, moveY: number): { x: number; z: number } {
+  const forwardX = Math.sin(yaw);
+  const forwardZ = Math.cos(yaw);
+  const rightX = -forwardZ;
+  const rightZ = forwardX;
+  return {
+    x: forwardX * moveY + rightX * moveX,
+    z: forwardZ * moveY + rightZ * moveX,
+  };
+}
+
+/** Positive amount is a right turn: mouse right, D, or stick right. */
+export function steerYaw(yaw: number, amount: number): number {
+  return yaw - amount;
+}
+
 export function blockedAt(
   x: number,
   z: number,

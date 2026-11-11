@@ -2,13 +2,29 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { LAYOUT, staticSolids, fenceSolids } from './layout.ts';
 import { TUNE } from './tune.ts';
-import { blockedAt, environmentFail, formatClock, formatDuration, impactKind } from './rules.ts';
+import { blockedAt, environmentFail, formatClock, formatDuration, impactKind, planarWish, steerYaw } from './rules.ts';
 
 test('formats survival time and the night clock', () => {
   assert.equal(formatDuration(0), '00:00');
   assert.equal(formatDuration(75), '01:15');
   assert.equal(formatClock(0), '02:17');
   assert.equal(formatClock(60), '02:18');
+});
+
+test('strafe and steer face the right side when looking down the road', () => {
+  const forward = planarWish(0, 0, 1);
+  assert.ok(forward.z > 0);
+  assert.ok(Math.abs(forward.x) < 1e-9);
+  assert.ok(planarWish(0, 1, 0).x < 0, 'D moves toward world -X, which is right when facing +Z');
+  assert.ok(planarWish(0, -1, 0).x > 0, 'A moves toward world +X, which is left when facing +Z');
+  const turned = steerYaw(0, 1);
+  assert.ok(turned < 0);
+  assert.ok(planarWish(turned, 0, 1).x < 0, 'a right turn points the nose to the right');
+  const looked = steerYaw(0.4, 0.2);
+  assert.ok(looked < 0.4, 'mouse right uses the same sign as steering right');
+  const side = planarWish(0.7, 1, 0);
+  const ahead = planarWish(0.7, 0, 1);
+  assert.ok(Math.abs(side.x * ahead.x + side.z * ahead.z) < 1e-9);
 });
 
 test('ram only when the bumper is close and fast', () => {

@@ -209,11 +209,19 @@ vec3 surface(vec3 world, vec3 base){
   if (kind < 0.5) return base;
   float n = n2(world.xz * 0.09);
   if (kind < 1.5) {
-    vec3 asphalt = vec3(0.045, 0.048, 0.055);
+    vec3 asphalt = vec3(0.04, 0.043, 0.05);
     float streak = n2(vec2(world.x * 0.55, world.z * 0.03));
     asphalt += vec3(0.012, 0.013, 0.016) * streak;
-    float edge = smoothstep(3.15, 3.55, abs(world.x)) * (1.0 - smoothstep(3.55, 3.9, abs(world.x)));
-    asphalt = mix(asphalt, vec3(0.28, 0.27, 0.24), edge * 0.85);
+    float edge = smoothstep(2.85, 3.2, abs(world.x)) * (1.0 - smoothstep(3.35, 3.8, abs(world.x)));
+    asphalt = mix(asphalt, vec3(0.62, 0.6, 0.5), edge * 0.92);
+    float dash = step(0.55, fract(world.z * 0.15));
+    float center = (1.0 - smoothstep(0.02, 0.1, abs(world.x))) * dash;
+    asphalt = mix(asphalt, vec3(0.75, 0.66, 0.32), center * 0.8);
+    float track = smoothstep(0.22, 0.0, abs(abs(world.x) - 1.15)) + smoothstep(0.22, 0.0, abs(abs(world.x) - 2.25));
+    asphalt *= 1.0 - track * 0.28;
+    float slush = smoothstep(0.55, 0.84, n2(world.xz * 0.17));
+    slush *= smoothstep(0.55, 2.5, abs(world.x));
+    asphalt = mix(asphalt, vec3(0.64, 0.68, 0.72), slush * 0.82);
     return asphalt * (0.92 + 0.08 * n);
   }
   if (kind < 2.5) {
@@ -239,6 +247,19 @@ void main(){
     albedo = mix(albedo, albedo * 0.65 + vec3(0.02), smoothstep(0.45, 0.8, wet));
   }
   vec3 col = shade(vWorld, N, albedo);
+  if (uMode > 0.5 && uMode < 1.5) {
+    float dash = step(0.36, fract(vWorld.z * 0.1));
+    dash *= 1.0 - smoothstep(0.07, 0.2, abs(vWorld.x));
+    col = mix(col, vec3(0.95, 0.76, 0.28), dash * 0.8);
+    float edgeLine = smoothstep(2.65, 2.9, abs(vWorld.x)) * (1.0 - smoothstep(3.15, 3.5, abs(vWorld.x)));
+    col = mix(col, vec3(0.92, 0.9, 0.8), edgeLine * 0.7);
+    float slush = smoothstep(0.58, 0.88, n2(vWorld.xz * 0.1 + vec2(2.0, 0.4)));
+    slush *= smoothstep(1.15, 3.3, abs(vWorld.x));
+    col = mix(col, vec3(0.86, 0.9, 0.94), slush * 0.62);
+  } else if (uMode > 1.5 && uMode < 2.5) {
+    float drift = n2(vWorld.xz * 0.06);
+    col = mix(col, vec3(0.78, 0.84, 0.9), smoothstep(0.35, 0.75, drift) * 0.4);
+  }
   gl_FragColor = vec4(pow(max(col, 0.0), vec3(0.4545)), 1.0);
 }
 `;
