@@ -34,6 +34,15 @@ canvas#view {
 
 #ui { position: fixed; inset: 0; pointer-events: none; }
 
+.cut {
+  position: fixed;
+  inset: 0;
+  background: #05070a;
+  opacity: 0;
+  pointer-events: none;
+  z-index: 8;
+}
+
 .vignette {
   position: fixed;
   inset: 0;

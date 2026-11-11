@@ -2,7 +2,8 @@ import * as THREE from 'three';
 import { AudioBus } from './audio';
 import { CHAPTERS, createChapter } from './chapters/registry';
 import { Input } from './input';
-import { loadProgress } from './progress';
+import { stationCheckpoint, type Kit } from './kit';
+import { loadProgress, markCleared } from './progress';
 import { formatClock } from './rules';
 import { loadSettings, saveSettings, type Settings } from './settings';
 import type { Chapter, Host, Report } from './types';
@@ -29,6 +30,11 @@ export class Game implements Host {
   private target: THREE.WebGLRenderTarget | null = null;
   private targetSamples = -1;
   private chapter: Chapter | null = null;
+  private chapterId = 'south-road';
+  private entryKit: Kit | null = null;
+  private crossing = false;
+  private pendingId: string | null = null;
+  private cut = 0;
   private mode: Mode = 'title';
   private overlayFrom: Overlay = 'title';
   private survival = 0;
@@ -107,6 +113,10 @@ export class Game implements Host {
   private start(): void {
     this.audio.resume();
     this.audio.wind(true);
+    this.entryKit = null;
+    this.crossing = false;
+    this.pendingId = null;
+    this.cut = 0;
     this.mountChapter('south-road');
     this.survival = 0;
     this.lines = [];
@@ -144,7 +154,11 @@ export class Game implements Host {
 
   private retry(): void {
     this.audio.resume();
-    this.mountChapter('south-road');
+    this.crossing = false;
+    this.pendingId = null;
+    this.cut = 0;
+    const kit = this.chapterId === 'substation' ? (this.entryKit ?? stationCheckpoint()) : undefined;
+    this.mountChapter(this.chapterId, kit);
     this.survival = 0;
     this.lines = [];
     this.hintText = '';
@@ -158,6 +172,9 @@ export class Game implements Host {
   private toTitle(): void {
     this.chapter?.dispose();
     this.chapter = null;
+    this.crossing = false;
+    this.pendingId = null;
+    this.cut = 0;
     this.lines = [];
     this.hintText = '';
     this.mode = 'title';
@@ -188,7 +205,12 @@ export class Game implements Host {
     if (!meta?.playable || !progress.cleared.includes(id)) return;
     this.audio.resume();
     this.audio.wind(true);
-    this.mountChapter(id);
+    this.crossing = false;
+    this.pendingId = null;
+    this.cut = 0;
+    const kit = id === 'substation' ? stationCheckpoint() : undefined;
+    this.entryKit = kit ?? null;
+    this.mountChapter(id, kit);
     this.survival = 0;
     this.lines = [];
     this.mode = 'playing';
@@ -198,9 +220,11 @@ export class Game implements Host {
     this.shell.show('hud');
   }
 
-  private mountChapter(id: string): void {
+  private mountChapter(id: string, kit?: Kit): void {
     this.chapter?.dispose();
-    this.chapter = createChapter(id, this);
+    this.night.resetMood();
+    this.chapterId = id;
+    this.chapter = createChapter(id, this, kit);
     this.chapter.mount();
   }
 
@@ -262,6 +286,8 @@ export class Game implements Host {
     const vignette = this.post.material.uniforms.uVignette;
     if (grain) grain.value = profile.grain;
     if (vignette) vignette.value = profile.vignette;
+    this.night.uniforms.uDetail.value = profile.detail;
+    this.night.uniforms.uVol.value = profile.vol;
   }
 
   private frame = (now: number): void => {
@@ -272,14 +298,18 @@ export class Game implements Host {
     if (this.mode === 'playing' && this.input.isLocked) this.sawLock = true;
     else if (this.mode === 'playing' && this.sawLock && !this.input.isLocked) this.pause();
     if (this.mode === 'playing' && this.chapter) {
-      if (this.input.consume('pause')) this.pause();
+      if (!this.crossing && this.input.consume('pause')) this.pause();
       if (this.mode === 'playing') {
-        this.chapter.update(dt);
         this.survival += dt;
-        const report = this.chapter.report();
-        if (report.fail) this.showInterrupt(report);
-        else if (report.complete) this.showBoundary();
-        else this.paintHud();
+        if (this.crossing) this.advance(dt);
+        else {
+          this.chapter.update(dt);
+          const report = this.chapter.report();
+          if (report.handoff) this.beginCross(report);
+          else if (report.fail) this.showInterrupt(report);
+          else if (report.complete) this.showBoundary(report);
+          else this.paintHud();
+        }
       }
     } else if ((this.mode === 'briefing' || this.mode === 'paused' || this.mode === 'interrupt' || this.mode === 'boundary') && this.chapter) {
       this.chapter.present(dt);
@@ -294,7 +324,9 @@ export class Game implements Host {
     this.sky.position.copy(this.camera.position);
     this.snow.points.position.copy(this.camera.position);
     this.snow.update(dt);
+    if (!this.crossing && this.cut > 0) this.cut = Math.max(0, this.cut - dt * 1.35);
     this.render();
+    this.shell.cut(this.cut);
     this.shell.vignette(this.damage > 0.25 && this.mode === 'playing');
   };
 
@@ -323,19 +355,48 @@ export class Game implements Host {
     );
   }
 
+  private beginCross(report: Report): void {
+    this.crossing = true;
+    this.pendingId = report.handoff;
+    this.entryKit = report.kit ?? stationCheckpoint();
+    this.audio.engine('off');
+    if (this.chapterId === 'south-road') markCleared('south-road');
+    this.cut = Math.max(this.cut, 0.15);
+  }
+
+  private advance(dt: number): void {
+    this.chapter?.present(dt);
+    this.cut = Math.min(1, this.cut + dt * 1.8);
+    if (this.cut < 1 || !this.pendingId) return;
+    const id = this.pendingId;
+    const kit = this.entryKit ?? stationCheckpoint();
+    this.pendingId = null;
+    this.crossing = false;
+    this.lines = [];
+    this.mountChapter(id, kit);
+    this.paintHud();
+  }
+
   private showInterrupt(report: Report): void {
     this.mode = 'interrupt';
     this.input.setGameplay(false);
     this.input.exitLock();
-    const reason = report.fail === 'ditch' ? '掉进冰沟' : '被击倒';
-    this.shell.interrupt(reason, this.survival, report.objectives);
+    const reason =
+      report.fail === 'ditch' ? '掉进冰沟' : report.fail === 'fire' ? '站内起火' : report.fail === 'surrounded' ? '在主控室被围住' : '被击倒';
+    this.shell.interrupt(reason, this.survival, report.objectives, report.place);
     this.shell.show('interrupt');
   }
 
-  private showBoundary(): void {
+  private showBoundary(report: Report): void {
     this.mode = 'boundary';
     this.input.setGameplay(false);
     this.input.exitLock();
+    if (report.place.startsWith('第二章')) {
+      markCleared('substation');
+      this.shell.boundaryCard('辅路通了', '钠灯亮了一排。桥上情况不明。这一版停在辅路上。');
+    } else {
+      this.shell.boundaryCard('外门开了', '变压器在响。馈线还没送上。');
+    }
     this.shell.show('boundary');
   }
 

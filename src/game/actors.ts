@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { meshBox } from '../render/night';
+import { buildWinterFigure } from './figure';
 import { resolveCircle } from './collide';
 import type { AABB } from './layout';
 import { TUNE } from './tune';
@@ -21,7 +21,7 @@ export class Fever {
   private timer = 0;
   private cool = 0;
   private walk = 0;
-  readonly root = new THREE.Group();
+  readonly root: THREE.Group;
   private readonly torso: THREE.Group;
   private readonly legL: THREE.Group;
   private readonly legR: THREE.Group;
@@ -34,35 +34,13 @@ export class Fever {
     this.line = line;
     this.wake = wake;
     this.yaw = Math.PI;
-    this.torso = pivot(mat, 0.58, 0.74, 0.36, coat, 0, 1.46, 0);
-    const hem = meshBox(mat, 0.66, 0.24, 0.4, coat);
-    hem.position.set(0, -0.74, 0.03);
-    const hood = meshBox(mat, 0.32, 0.3, 0.34, coat);
-    hood.position.set(0, 0.16, -0.05);
-    const scarf = meshBox(mat, 0.26, 0.08, 0.2, 0x6a3030);
-    scarf.position.set(0, -0.04, 0.1);
-    this.torso.add(hem, hood, scarf);
-    this.legL = pivot(mat, 0.16, 0.7, 0.17, 0x241c1a, -0.15, 0.78, 0);
-    this.legR = pivot(mat, 0.16, 0.7, 0.17, 0x241c1a, 0.15, 0.78, 0);
-    const bootL = meshBox(mat, 0.18, 0.12, 0.26, 0x161311);
-    bootL.position.set(0, -0.7, 0.04);
-    const bootR = meshBox(mat, 0.18, 0.12, 0.26, 0x161311);
-    bootR.position.set(0, -0.7, 0.04);
-    this.legL.add(bootL);
-    this.legR.add(bootR);
-    this.armL = pivot(mat, 0.16, 0.56, 0.16, coat, -0.4, 1.4, 0);
-    this.armR = pivot(mat, 0.16, 0.56, 0.16, coat, 0.4, 1.4, 0);
-    const mittenL = meshBox(mat, 0.12, 0.1, 0.12, 0x2a2420);
-    mittenL.position.set(0, -0.58, 0.02);
-    const mittenR = meshBox(mat, 0.12, 0.1, 0.12, 0x2a2420);
-    mittenR.position.set(0, -0.58, 0.02);
-    this.armL.add(mittenL);
-    this.armR.add(mittenR);
-    const head = meshBox(mat, 0.18, 0.2, 0.18, 0xc4b6aa);
-    head.position.set(0, 1.62, 0.04);
-    const cap = meshBox(mat, 0.22, 0.08, 0.22, coat);
-    cap.position.set(0, 1.74, 0.01);
-    this.root.add(this.torso, this.legL, this.legR, this.armL, this.armR, head, cap);
+    const fig = buildWinterFigure(mat, { coat, skin: 0xc4b6aa, scarf: 0x6a3030 });
+    this.root = fig.root;
+    this.torso = fig.torso;
+    this.legL = fig.legL;
+    this.legR = fig.legR;
+    this.armL = fig.armL;
+    this.armR = fig.armR;
     this.root.position.set(x, 0, z);
     parent.add(this.root);
   }
@@ -166,11 +144,3 @@ export class Fever {
   }
 }
 
-function pivot(mat: THREE.Material, w: number, h: number, d: number, color: number, x: number, y: number, z: number): THREE.Group {
-  const group = new THREE.Group();
-  group.position.set(x, y, z);
-  const mesh = meshBox(mat, w, h, d, color);
-  mesh.position.y = -h / 2;
-  group.add(mesh);
-  return group;
-}

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { createBeam, emissiveMaterial, meshBox, paint } from '../render/night';
+import { createBeam, emissiveMaterial, meshBox, paint, type NightField } from '../render/night';
 import { resolveCircle } from './collide';
 import type { AABB } from './layout';
 import { steerYaw } from './rules';
@@ -16,7 +16,7 @@ export class Truck {
   readonly beam: THREE.Mesh;
   private readonly glow: THREE.ShaderMaterial;
 
-  constructor(parent: THREE.Object3D, mat: THREE.Material) {
+  constructor(parent: THREE.Object3D, mat: THREE.Material, field?: NightField) {
     this.group.name = 'power-truck';
     const body = meshBox(mat, 1.85, 0.46, 3.9, 0x2a3830);
     body.position.set(0, 0.48, 0.05);
@@ -26,7 +26,13 @@ export class Truck {
     bed.position.set(0, 0.72, -1.45);
     const glass = meshBox(mat, 1.45, 0.05, 0.04, 0x141a20);
     glass.position.set(0, 1.32, 0.05);
-    this.group.add(body, cab, bed, glass);
+    const hood = meshBox(mat, 1.7, 0.14, 1.05, 0x24302a);
+    hood.position.set(0, 0.78, 1.2);
+    const bumper = meshBox(mat, 1.95, 0.16, 0.16, 0x161a18);
+    bumper.position.set(0, 0.38, 2.02);
+    const snow = meshBox(mat, 1.35, 0.07, 0.85, 0xe7eef4);
+    snow.position.set(0, 1.34, -0.55);
+    this.group.add(body, cab, bed, glass, hood, bumper, snow);
     const wheelGeo = new THREE.CylinderGeometry(0.32, 0.32, 0.22, 10);
     paint(wheelGeo, new THREE.Color(0x1a1c1e));
     for (const side of [-1, 1]) {
@@ -46,10 +52,12 @@ export class Truck {
       glow.position.set(side * 0.55, 0.62, 2.12);
       this.group.add(glow);
     }
-    this.beam = createBeam();
+    this.beam = createBeam(field);
     this.beam.position.set(0, 0.66, 2.05);
     this.beam.rotation.y = Math.PI;
-    this.beam.scale.set(1.35, 1.35, 16);
+    const beamMat = this.beam.material as THREE.ShaderMaterial;
+    beamMat.uniforms.uAlpha.value = 0.07;
+    this.beam.scale.set(1.1, 1.1, 14);
     this.group.add(this.beam);
     parent.add(this.group);
     this.sync();

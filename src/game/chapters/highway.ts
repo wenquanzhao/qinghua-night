@@ -1,11 +1,13 @@
 import * as THREE from 'three';
 import { Fever } from '../actors';
+import type { Kit } from '../kit';
 import { LAYOUT, worldSolids, fenceSolids, staticSolids, type AABB } from '../layout';
 import { FootMover } from '../player';
 import { environmentFail, impactKind, steerYaw } from '../rules';
 import { Truck } from '../truck';
 import { TUNE } from '../tune';
 import type { Chapter, Host, Objective, Report } from '../types';
+import { bareTreeGeometry, barrierGeometry, cabinetGeometry, railBayGeometry, scatter } from '../../render/dress';
 import {
   createBeam,
   createLitMaterial,
@@ -14,6 +16,7 @@ import {
   paint,
   signMaterial,
   tagMode,
+  tagTree,
   windowMaterial,
 } from '../../render/night';
 
@@ -71,11 +74,12 @@ export class HighwayChapter implements Chapter {
   private bob = 0;
   private bobAmt = 0;
   private t = 0;
-  private mode: 'play' | 'fail' | 'end' = 'play';
+  private mode: 'play' | 'fail' | 'cross' = 'play';
   private failKind: 'down' | 'ditch' = 'down';
   private failT = 0;
   private failReady = false;
-  private endT = 0;
+  private crossT = 0;
+  private crossReady = false;
   private complete = false;
   private lootedTruck = false;
   private lootedPolice = false;
@@ -102,7 +106,7 @@ export class HighwayChapter implements Chapter {
 
   constructor(private readonly host: Host) {
     this.lit = createLitMaterial(host.night);
-    this.truck = new Truck(this.root, this.lit);
+    this.truck = new Truck(this.root, this.lit, host.night);
     this.truck.x = LAYOUT.truckStart.x;
     this.truck.z = LAYOUT.truckStart.z;
     this.coat = new Fever(this.root, this.lit, LAYOUT.coat.x, LAYOUT.coat.z, 0x6a5a48, '冷', 5);
@@ -118,6 +122,7 @@ export class HighwayChapter implements Chapter {
     this.host.scene.add(this.root);
     this.buildWorld();
     this.buildView();
+    for (const enemy of this.enemies) tagTree(enemy.root, this.host.night, 9);
     this.truck.sync();
     const seat = this.truck.seat();
     this.foot.x = seat.x;
@@ -166,9 +171,9 @@ export class HighwayChapter implements Chapter {
       this.visuals(dt);
       return;
     }
-    if (this.mode === 'end') {
-      this.endT -= dt;
-      if (this.endT <= 0) this.complete = true;
+    if (this.mode === 'cross') {
+      this.crossT -= dt;
+      if (this.crossT <= 0) this.crossReady = true;
       this.visuals(dt);
       return;
     }
@@ -226,13 +231,16 @@ export class HighwayChapter implements Chapter {
       riding: this.riding,
       fail: this.failReady ? this.failKind : null,
       complete: this.complete,
+      handoff: this.crossReady ? 'substation' : null,
+      kit: this.crossReady ? this.carried() : null,
+      place: '第一章 · 南岸公路',
       crosshair: !this.riding && this.mode === 'play',
       debug: `${this.riding ? '车' : '步'} ${x.toFixed(1)} ${z.toFixed(1)} ${this.coatState}`,
     };
   }
 
   private primary(): string {
-    if (this.complete || this.mode === 'end') return '外门开了';
+    if (this.mode === 'cross') return '变压器在响';
     if (this.foot.z > 246 || this.truck.z > 246) return '扳开铁门，或从侧面检修门进去';
     return '沿县道到南岸变电站大门';
   }
@@ -719,8 +727,8 @@ export class HighwayChapter implements Chapter {
     if (this.mode !== 'play' || this.riding) return;
     if (!(this.gateOpen || this.sideOpen)) return;
     if (this.foot.z < 263.9) return;
-    this.mode = 'end';
-    this.endT = 2.3;
+    this.mode = 'cross';
+    this.crossT = 1.15;
     this.mark('enter');
     this.mark('road');
     this.host.audio.discharge();
@@ -787,18 +795,18 @@ export class HighwayChapter implements Chapter {
     const bumper = this.truck.bumper();
     const yaw = this.truck.yaw;
     lamps[0].pos.set(bumper.x, 0.85, bumper.z);
-    lamps[0].dir.set(Math.sin(yaw), -0.06, Math.cos(yaw));
+    lamps[0].dir.set(Math.sin(yaw), -0.16, Math.cos(yaw));
     lamps[0].color.set(1, 0.84, 0.58);
-    lamps[0].range = 52;
-    lamps[0].angle = 0.42;
-    lamps[0].intensity = head ? 4.8 : 0;
+    lamps[0].range = 38;
+    lamps[0].angle = 0.55;
+    lamps[0].intensity = head ? 2.15 : 0;
     const aim = this.aim();
     lamps[1].pos.set(aim.x, aim.y, aim.z);
     lamps[1].dir.set(aim.dx, aim.dy, aim.dz);
     lamps[1].color.set(0.75, 0.84, 0.96);
-    lamps[1].range = 20;
+    lamps[1].range = 16;
     lamps[1].angle = 0.9;
-    lamps[1].intensity = !this.riding && this.flashOn ? 2.6 : 0;
+    lamps[1].intensity = !this.riding && this.flashOn ? 1.7 : 0;
     lamps[2].pos.set(LAYOUT.policeLoot.x, 1.6, LAYOUT.policeLoot.z);
     lamps[2].dir.set(0, -1, 0);
     lamps[2].color.set(blinkColor(this.t));
@@ -811,6 +819,32 @@ export class HighwayChapter implements Chapter {
     lamps[3].range = 8;
     lamps[3].angle = -1;
     lamps[3].intensity = 0.55 + 0.2 * Math.sin(this.t * 3);
+    lamps[4].pos.set(-7.4, 5.4, 78);
+    lamps[4].dir.set(0.55, -0.72, 0.15);
+    lamps[4].color.set(1, 0.52, 0.16);
+    lamps[4].range = 22;
+    lamps[4].angle = 0.22;
+    lamps[4].intensity = 2.8;
+    lamps[5].pos.set(7.6, 5.4, 168);
+    lamps[5].dir.set(-0.55, -0.72, 0.12);
+    lamps[5].color.set(1, 0.52, 0.16);
+    lamps[5].range = 22;
+    lamps[5].angle = 0.22;
+    lamps[5].intensity = 2.6;
+  }
+
+  private carried(): Kit {
+    return {
+      health: this.health,
+      hasFlash: this.hasFlash,
+      flashOn: this.flashOn,
+      headlamp: false,
+      hasBar: this.hasBar,
+      hasGun: this.hasGun,
+      ammoIn: this.ammoIn,
+      ammoReserve: this.ammoRes,
+      weapon: this.weapon,
+    };
   }
 
   private syncCamera(): void {
@@ -877,10 +911,10 @@ export class HighwayChapter implements Chapter {
     lamp.position.set(-0.06, 0.02, -0.05);
     this.view.add(sleeve, this.barMesh, this.gunMesh, lamp);
     this.host.camera.add(this.view);
-    this.flashBeam = createBeam();
+    this.flashBeam = createBeam(this.host.night);
     const beamMat = this.flashBeam.material as THREE.ShaderMaterial;
     beamMat.uniforms.uColor.value.set(0xc9d7e6);
-    beamMat.uniforms.uAlpha.value = 0.22;
+    beamMat.uniforms.uAlpha.value = 0.08;
     this.flashBeam.position.set(0.05, -0.08, -0.25);
     this.flashBeam.scale.set(1.5, 1.5, 11);
     this.host.camera.add(this.flashBeam);
@@ -940,6 +974,7 @@ export class HighwayChapter implements Chapter {
     this.addSign(['南岸变电站'], 0, LAYOUT.gateZ - 0.8, 0);
     this.addRoadDressing();
     this.addTrees();
+    this.addShoulder();
     this.addPoles();
     this.addFarBank();
     const amber = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.12, 0.12), emissiveMaterial(0xff8a2a, 1.4));
@@ -1113,7 +1148,8 @@ export class HighwayChapter implements Chapter {
   }
 
   private addRoadDressing(): void {
-    const clumpGeo = new THREE.BoxGeometry(2.2, 0.18, 2.4);
+    const clumpGeo = new THREE.SphereGeometry(1.1, 7, 5);
+    clumpGeo.scale(1.5, 0.22, 1.05);
     paint(clumpGeo, new THREE.Color(0xe8eef3));
     const clumps = new THREE.InstancedMesh(clumpGeo, this.lit, 56);
     const dummy = new THREE.Object3D();
@@ -1138,29 +1174,61 @@ export class HighwayChapter implements Chapter {
   }
 
   private addTrees(): void {
-    const geo = new THREE.ConeGeometry(0.9, 3.4, 6);
-    geo.translate(0, 1.6, 0);
-    paint(geo, new THREE.Color(0x121614));
-    const mesh = new THREE.InstancedMesh(geo, this.lit, 48);
-    const dummy = new THREE.Object3D();
+    const geo = bareTreeGeometry();
+    const spots = [];
     const rand = mulberry(11);
-    let n = 0;
-    for (let z = 0; z < 248 && n < 48; z += 13) {
+    for (let z = 6; z < 250; z += 11) {
       for (const side of [-1, 1]) {
-        if (n >= 48) break;
-        if (side < 0 && z > 124 && z < 148) continue;
-        dummy.position.set(side * (8.4 + rand() * 1.6), 0, z + (rand() - 0.5) * 3);
-        const s = 0.75 + rand() * 0.7;
-        dummy.scale.set(s, 0.8 + rand() * 0.6, s);
-        dummy.rotation.y = rand() * Math.PI;
-        dummy.updateMatrix();
-        mesh.setMatrixAt(n, dummy.matrix);
-        n += 1;
+        if (side < 0 && z > 124 && z < 150) continue;
+        spots.push({
+          x: side * (7.3 + rand() * 1.4),
+          z: z + (rand() - 0.5) * 3,
+          ry: rand() * Math.PI,
+          s: 0.85 + rand() * 0.55,
+        });
       }
     }
-    mesh.count = n;
-    mesh.instanceMatrix.needsUpdate = true;
-    this.root.add(mesh);
+    scatter(this.root, this.lit, geo, spots);
+  }
+
+  private addShoulder(): void {
+    const field = this.host.night;
+    const rails = [];
+    for (let z = 6; z < 250; z += 2.2) {
+      if (z > 124 && z < 148) {
+        rails.push({ x: 4.85, z });
+        continue;
+      }
+      rails.push({ x: -4.85, z });
+      rails.push({ x: 4.85, z });
+    }
+    scatter(this.root, this.lit, railBayGeometry(), rails, field, 8);
+    scatter(
+      this.root,
+      this.lit,
+      barrierGeometry(),
+      [
+        { x: -6.4, z: 132, ry: 0.3 },
+        { x: -6.8, z: 136, ry: -0.2 },
+        { x: 6.2, z: 248, ry: 0.4 },
+        { x: -6.1, z: 252, ry: -0.5 },
+      ],
+      field,
+      8,
+    );
+    scatter(
+      this.root,
+      this.lit,
+      cabinetGeometry(),
+      [
+        { x: -7.4, z: 36, ry: 0.2 },
+        { x: 8.6, z: 78, ry: -0.4 },
+        { x: 8.2, z: 168, ry: 0.15 },
+        { x: -8.4, z: 204, ry: 0.5 },
+      ],
+      field,
+      8,
+    );
   }
 
   private addPoles(): void {
@@ -1180,6 +1248,11 @@ export class HighwayChapter implements Chapter {
     mesh.count = n;
     mesh.instanceMatrix.needsUpdate = true;
     this.root.add(mesh);
+    for (let z = 16; z < 240; z += 44) {
+      const globe = new THREE.Mesh(new THREE.SphereGeometry(0.2, 12, 10), emissiveMaterial(0xff9a3a, 2.4));
+      globe.position.set(z < 120 ? -7.4 : 7.6, 5.55, z);
+      this.root.add(globe);
+    }
   }
 
   private addFarBank(): void {

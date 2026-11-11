@@ -1,6 +1,7 @@
 import type * as THREE from 'three';
 import type { AudioBus } from './audio';
 import type { Input } from './input';
+import type { Kit } from './kit';
 import type { Settings } from './settings';
 import type { NightField, QualityProfile } from '../render/night';
 
@@ -36,8 +37,13 @@ export interface Report {
   prompt: string;
   hold: number;
   riding: boolean;
-  fail: null | 'down' | 'ditch';
+  fail: null | 'down' | 'ditch' | 'fire' | 'surrounded';
   complete: boolean;
+  /** Set for one report once the next chapter should mount. */
+  handoff: null | 'substation';
+  /** Gear at the moment of a handoff. Null while staying in the chapter. */
+  kit: Kit | null;
+  place: string;
   crosshair: boolean;
   debug: string;
 }

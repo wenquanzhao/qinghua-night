@@ -113,6 +113,18 @@ export class AudioBus {
     this.burst(880, 0.03, 1200, 0.04);
   }
 
+  alarm(): void {
+    this.burst(96, 0.42, 520, 0.14);
+  }
+
+  spray(): void {
+    this.burst(520, 0.18, 2400, 0.07);
+  }
+
+  arc(): void {
+    this.burst(140, 0.16, 1800, 0.1);
+  }
+
   hurt(): void {
     this.burst(120, 0.1, 200, 0.08);
   }

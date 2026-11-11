@@ -31,6 +31,7 @@ export class Shell {
     private readonly handlers: ShellHandlers,
   ) {
     root.innerHTML = `
+      <div class="cut"></div>
       <div class="vignette"></div>
       <section class="screen title" data-screen="title"></section>
       <section class="screen brief-wrap" data-screen="briefing"></section>
@@ -54,7 +55,7 @@ export class Shell {
         <button class="act" data-open="chapters">章节选择</button>
         <button class="act" data-open="settings">设置</button>
         <button class="act" data-open="help">操作说明</button>
-        <div class="ver">v0.1</div>
+        <div class="ver">v0.2</div>
       </div>`;
     this.screens.get('briefing')!.innerHTML = `
       <div class="plate brief">
@@ -72,7 +73,7 @@ export class Shell {
       </div>`;
     this.screens.get('hud')!.innerHTML = `
       <div class="hud-top">
-        <div class="kicker">第一章 · 南岸公路</div>
+        <div class="kicker" data-place>第一章 · 南岸公路</div>
         <div class="objective"></div>
       </div>
       <div class="clock"></div>
@@ -92,7 +93,8 @@ export class Shell {
         <p>方向键或 IJKL 也可以转向，不锁定鼠标时用这组键。</p>
         <p>手柄：左摇杆移动，右摇杆转向。A 跳，B 蹲，X 换弹，Y 头灯，LB 近战，RB 或 RT 射击，LT 点按上下车，按住 LT 搜寻或扳门，L3 冲刺，Start 暂停。</p>
         <p>触屏：点按屏幕后出现摇杆和按钮。点按「互动」上下车，按住「互动」搜寻或扳门。射击、近战、跳、蹲、换弹、头灯、冲刺、暂停。</p>
-        <p>路上的人可以绕开，也可以停车。撞上去，车就废了。桥前的冰会让车熄火。掉进冰沟，或被击倒，这一趟就中断。低画质仍可完整游玩。</p>
+        <p>路上的人可以绕开，也可以停车。撞上去，车就废了。桥前的冰会让车熄火。掉进冰沟，或被击倒，这一趟就中断。外门打开后进入南岸变电站。</p>
+        <p>变电站：先合 2 号进线，再保护复位，再馈出。顺序错了会跳闸。1 号进线标着禁止，合上会短路起火。同事可以锁门绕开，或击倒后用检修椅上的绝缘胶带绑住。灭火器、热风枪、隔离开关都能把人逼开。低画质仍可完整游玩。中、高画质会打开积水高光、光束和胶片颗粒。</p>
         <button class="act" data-go="back">返回</button>
       </div>`;
     this.screens.get('interrupt')!.innerHTML = `
@@ -127,6 +129,11 @@ export class Shell {
       if (go === 'back') this.handlers.back();
       if (open === 'chapters' || open === 'settings' || open === 'help') this.handlers.open(open);
     });
+  }
+
+  cut(opacity: number): void {
+    const node = document.querySelector<HTMLElement>('#ui .cut');
+    if (node) node.style.opacity = String(opacity);
   }
 
   show(name: string): void {
@@ -175,6 +182,8 @@ export class Shell {
     const root = this.screens.get('hud')!;
     const objective = root.querySelector('.objective');
     if (objective) objective.textContent = report.primary;
+    const place = root.querySelector('[data-place]');
+    if (place) place.textContent = report.place;
     const clockNode = root.querySelector('.clock');
     if (clockNode) clockNode.textContent = clock;
     const cross = root.querySelector<HTMLElement>('.crosshair');
@@ -224,11 +233,13 @@ export class Shell {
     }
   }
 
-  interrupt(reason: string, seconds: number, done: Objective[]): void {
+  interrupt(reason: string, seconds: number, done: Objective[], place: string): void {
     const root = this.screens.get('interrupt')!;
     const reasonNode = root.querySelector('.reason');
     const timeNode = root.querySelector('.time');
+    const where = root.querySelector('.where');
     const list = root.querySelector('.done');
+    if (where) where.textContent = place;
     if (reasonNode) reasonNode.textContent = reason;
     if (timeNode) timeNode.textContent = `生存 ${formatDuration(seconds)}`;
     if (list) {
@@ -237,6 +248,18 @@ export class Shell {
         ? finished.map((item) => `<p>${item.text}</p>`).join('')
         : '<p class="muted">还没有完成的目标</p>';
     }
+  }
+
+  boundaryCard(title: string, body: string): void {
+    const root = this.screens.get('boundary')!;
+    root.innerHTML = `
+      <div class="plate center-card">
+        <div class="kicker">青桦一夜</div>
+        <h2>${title}</h2>
+        <p>${body}</p>
+        <button class="act" data-go="replay">再走一遍</button>
+        <button class="act" data-go="title">返回标题</button>
+      </div>`;
   }
 
   private chapterRow(chapter: ChapterMeta, cleared: string[]): string {

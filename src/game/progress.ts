@@ -4,7 +4,7 @@ export interface Progress {
   cleared: string[];
 }
 
-/** Read-only in v0.1. Later versions write chapter ids here. Failures must not wipe it. */
+/** Failures must not wipe this. Only a cleared chapter is written. */
 export function loadProgress(): Progress {
   try {
     const raw = localStorage.getItem(KEY);
@@ -15,4 +15,11 @@ export function loadProgress(): Progress {
   } catch {
     return { cleared: [] };
   }
+}
+
+export function markCleared(id: string): void {
+  const progress = loadProgress();
+  if (progress.cleared.includes(id)) return;
+  progress.cleared.push(id);
+  localStorage.setItem(KEY, JSON.stringify(progress));
 }
