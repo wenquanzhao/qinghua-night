@@ -804,7 +804,7 @@ export class StationChapter implements Chapter {
     if (inside) {
       amb.set(dark ? 0.012 : 0.045, dark ? 0.014 : 0.05, dark ? 0.02 : 0.07);
       fog.set(this.fire ? 0.22 : 0.05, this.fire ? 0.045 : 0.03, 0.025);
-      this.host.night.uniforms.uFogDensity.value = dark ? 0.05 : 0.028;
+      this.host.night.uniforms.uFogDensity.value = dark ? 0.034 : 0.016;
       this.host.night.uniforms.uIndoor.value = 1;
     } else {
       amb.set(0.16, 0.175, 0.22);
@@ -825,11 +825,11 @@ export class StationChapter implements Chapter {
     lamps[0].angle = this.headlamp ? 0.62 : 0.86;
     lamps[0].intensity = this.flashOn && this.hasFlash ? (this.headlamp ? 2.1 : 1.55) : 0;
     lamps[1].pos.set(0, 2.85, 7.72);
-    lamps[1].dir.set(0, -0.55, -1);
+    lamps[1].dir.set(0, -0.92, -0.28);
     lamps[1].color.set(1, 0.46, 0.2);
-    lamps[1].range = 18;
-    lamps[1].angle = 0.15;
-    lamps[1].intensity = dark ? 0.2 : 2.4;
+    lamps[1].range = 11;
+    lamps[1].angle = 0.42;
+    lamps[1].intensity = dark ? 0.15 : 1.7;
     STATION.lamps.forEach((z, index) => {
       const lamp = lamps[index + 2];
       lamp.pos.set(6.35, 5.15, z);
@@ -952,6 +952,7 @@ export class StationChapter implements Chapter {
     this.addProps();
     this.addLamps();
     this.addInsulators();
+    this.addWorkplace();
     this.addHospital();
     this.addPipes();
   }
@@ -1120,13 +1121,15 @@ export class StationChapter implements Chapter {
     this.deskLamp = emissiveMaterial(0xffc48a, 1.4);
     const emerg = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.12, 0.16), this.emergency);
     emerg.position.set(0.2, 3.05, 23.2);
-    const porch = new THREE.Mesh(new THREE.SphereGeometry(0.06, 10, 8), this.emergency);
-    porch.position.set(0, 2.85, 7.68);
+    const porch = new THREE.Mesh(new THREE.SphereGeometry(0.045, 10, 8), this.emergency);
+    porch.position.set(0, 2.78, 7.62);
+    const hood = meshBox(this.lit, 0.34, 0.06, 0.28, 0x2a241c);
+    hood.position.set(0, 2.88, 7.58);
     const desk = new THREE.Mesh(new THREE.SphereGeometry(0.09, 12, 10), this.deskLamp);
     desk.position.set(STATION.phone.x, 1.05, STATION.phone.z - 0.15);
     const shade = meshBox(this.lit, 0.22, 0.08, 0.22, 0x2a241c);
     shade.position.set(STATION.phone.x, 1.16, STATION.phone.z - 0.15);
-    this.root.add(emerg, porch, desk, shade);
+    this.root.add(emerg, porch, hood, desk, shade);
     for (const z of STATION.lamps) {
       const pole = meshBox(this.lit, 0.1, 5.2, 0.1, 0x2a3036);
       pole.position.set(6.35, 2.6, z);
@@ -1142,26 +1145,11 @@ export class StationChapter implements Chapter {
   }
 
   private addInsulators(): void {
-    const positions = [
-      [-8.4, 6.2],
-      [-3.4, 6.0],
-      [3.6, 6.1],
-      [8.2, 6.3],
-    ];
-    for (const [x, z] of positions) {
-      const post = meshBox(this.lit, 0.18, 2.4, 0.18, 0x3a4048);
-      post.position.set(x, 1.2, z);
-      tagMode(post, this.host.night, 8);
-      this.root.add(post);
-      for (let i = 0; i < 4; i++) {
-        const bell = new THREE.Mesh(new THREE.SphereGeometry(0.16, 10, 8), this.lit);
-        paint(bell.geometry, new THREE.Color(0.75, 0.82, 0.86));
-        bell.scale.y = 0.7;
-        bell.position.set(x, 1.7 + i * 0.28, z);
-        tagMode(bell, this.host.night, 3);
-        this.root.add(bell);
-      }
-    }
+    this.gantry(-3.35, 6.6);
+    this.gantry(3.35, 6.55);
+    const sag = meshBox(this.lit, 5.4, 0.02, 0.02, 0x14161a);
+    sag.position.set(0, 3.02, 6.7);
+    this.root.add(sag);
     const bush = new THREE.ConeGeometry(0.35, 0.7, 5);
     bush.translate(0, 0.3, 0);
     paint(bush, new THREE.Color(0xd7e0e6));
@@ -1179,6 +1167,79 @@ export class StationChapter implements Chapter {
     mesh.instanceMatrix.needsUpdate = true;
     tagMode(mesh, this.host.night, 2);
     this.root.add(mesh);
+  }
+
+  private gantry(x: number, z: number): void {
+    const field = this.host.night;
+    const steel = 0x3a444e;
+    const left = meshBox(this.lit, 0.16, 3.3, 0.16, steel);
+    left.position.set(x - 0.85, 1.65, z);
+    const right = meshBox(this.lit, 0.16, 3.3, 0.16, steel);
+    right.position.set(x + 0.85, 1.65, z);
+    const arm = meshBox(this.lit, 2.05, 0.1, 0.14, steel);
+    arm.position.set(x, 3.15, z);
+    const snow = meshBox(this.lit, 1.9, 0.08, 0.22, 0xe4eef4);
+    snow.position.set(x, 3.26, z);
+    tagMode(left, field, 8);
+    tagMode(right, field, 8);
+    tagMode(arm, field, 8);
+    tagMode(snow, field, 2);
+    this.root.add(left, right, arm, snow);
+    for (const bx of [-0.5, 0, 0.5]) {
+      for (let i = 0; i < 3; i++) {
+        const bell = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.09, 0.07, 8), this.lit);
+        paint(bell.geometry, new THREE.Color(0.72, 0.8, 0.84));
+        bell.position.set(x + bx, 2.95 - i * 0.16, z);
+        tagMode(bell, field, 3);
+        this.root.add(bell);
+      }
+    }
+  }
+
+  private addWorkplace(): void {
+    const field = this.host.night;
+    for (let z = 9.4; z <= 26.5; z += 2.3) {
+      const beam = meshBox(this.lit, 21.2, 0.12, 0.16, 0x2c333b);
+      beam.position.set(0, 3.12, z);
+      const tray = meshBox(this.lit, 0.28, 0.06, 2.1, 0x3a444e);
+      tray.position.set(2.15, 2.92, z);
+      tagMode(beam, field, 8);
+      tagMode(tray, field, 8);
+      this.root.add(beam, tray);
+    }
+    for (let i = 0; i < 6; i++) {
+      const z = 9.2 + i * 1.7;
+      const panel = meshBox(this.lit, 0.06, 1.7, 1.35, i % 2 === 0 ? 0x343a32 : 0x2a2824);
+      panel.position.set(-10.95, 1.35, z);
+      const seam = meshBox(this.lit, 0.02, 1.55, 0.04, 0x1a1c20);
+      seam.position.set(-10.9, 1.35, z + 0.62);
+      this.root.add(panel, seam);
+    }
+    for (const x of [-8.4, -6.2, -4.2, 4.2, 6.2, 8.4]) {
+      const pier = meshBox(this.lit, 0.38, 3.05, 0.42, 0x3a4038);
+      pier.position.set(x, 1.52, 7.48);
+      const frost = meshBox(this.lit, 0.46, 0.1, 0.48, 0xe7eef4);
+      frost.position.set(x, 3.08, 7.45);
+      tagMode(frost, field, 2);
+      this.root.add(pier, frost);
+    }
+    const canopy = meshBox(this.lit, 3.4, 0.08, 0.7, 0x3a444e);
+    canopy.position.set(0, 2.72, 7.35);
+    const canopySnow = meshBox(this.lit, 3.5, 0.07, 0.75, 0xe4eef4);
+    canopySnow.position.set(0, 2.8, 7.32);
+    tagMode(canopy, field, 8);
+    tagMode(canopySnow, field, 2);
+    this.root.add(canopy, canopySnow);
+    const tube = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.06, 0.08), emissiveMaterial(0xffd2a8, 4.5));
+    tube.position.set(0, 3.02, 12.4);
+    const tube2 = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.05, 0.07), emissiveMaterial(0xffc48a, 3.2));
+    tube2.position.set(6.4, 2.4, 21.4);
+    this.root.add(tube, tube2);
+    for (let i = 0; i < 5; i++) {
+      const dot = new THREE.Mesh(new THREE.SphereGeometry(0.035, 8, 6), emissiveMaterial(i === 3 ? 0xff3a2a : 0x7dffa8, 2.4));
+      dot.position.set(8.55, 1.15 + (i % 3) * 0.18, 21.2 + i * 0.85);
+      this.root.add(dot);
+    }
   }
 
   private addHospital(): void {

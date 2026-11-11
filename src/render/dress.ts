@@ -11,14 +11,15 @@ const BARK = 0x2c261f;
 /** One shared winter-county scale. Pieces are built to meters and instanced. */
 export function bareTreeGeometry(): THREE.BufferGeometry {
   const parts = [
-    column(0.09, 0.13, 2.6, BARK, 0, 1.3, 0),
-    limb(0.9, 0.22, 0.55, 0.35),
-    limb(0.7, -0.4, 1.15, -0.5),
-    limb(0.55, 0.15, 1.7, 0.8),
-    limb(0.4, -0.2, 2.15, 2.2),
-    snowCap(0.22, 0.55, 0.7),
-    snowCap(0.16, -0.35, 1.25),
-    snowCap(0.14, 0.2, 1.9),
+    column(0.07, 0.16, 3.4, BARK, 0, 1.7, 0),
+    limb(1.15, 0.35, 1.7, 0.4),
+    limb(1.05, -0.4, 2.05, 2.2),
+    limb(0.85, 0.1, 2.45, 4.1),
+    limb(0.7, -0.15, 2.8, 1.1),
+    snowCap(0.38, 0.15, 3.15),
+    snowCap(0.28, 0.55, 2.15),
+    snowCap(0.26, -0.5, 2.45),
+    snowCap(0.18, 0.05, 3.45),
   ];
   return mergeGeometries(parts, false) ?? parts[0];
 }

@@ -22,9 +22,9 @@ export interface QualityProfile {
 }
 
 export const PROFILES: Record<QualityName, QualityProfile> = {
-  low: { id: 'low', scale: 0.7, snow: 280, post: false, grain: 0, vignette: 0.28, samples: 0, detail: 0, vol: 0 },
-  mid: { id: 'mid', scale: 1, snow: 900, post: true, grain: 0.045, vignette: 0.42, samples: 0, detail: 1, vol: 1 },
-  high: { id: 'high', scale: 1.25, snow: 1600, post: true, grain: 0.06, vignette: 0.5, samples: 2, detail: 1, vol: 1 },
+  low: { id: 'low', scale: 0.7, snow: 280, post: false, grain: 0, vignette: 0.2, samples: 0, detail: 0, vol: 0 },
+  mid: { id: 'mid', scale: 1, snow: 900, post: true, grain: 0.02, vignette: 0.3, samples: 0, detail: 1, vol: 1 },
+  high: { id: 'high', scale: 1.15, snow: 1400, post: true, grain: 0.026, vignette: 0.32, samples: 0, detail: 1, vol: 1 },
 };
 
 export function detectQuality(): QualityName {
@@ -194,29 +194,9 @@ vec3 lamp(vec3 pos, vec3 N, vec3 V, vec3 albedo, float rough, float wet, vec3 lp
   float wrap = max(dot(N, L) * 0.65 + 0.35, 0.0);
   float diff = mix(ndl, wrap, 0.35);
   vec3 H = normalize(L + V);
-  float specPow = mix(10.0, 96.0, clamp(1.0 - rough, 0.0, 1.0));
-  float spec = pow(max(dot(N, H), 0.0), specPow) * (0.04 + wet * 0.85);
-  return lc * inten * spot * att * (albedo * diff + spec);
-}
-
-vec3 volCone(vec3 pos, vec3 lp, vec3 ld, vec3 lc, float range, float cosA, float inten){
-  if (uVol < 0.5 || inten < 0.08 || range < 0.2) return vec3(0.0);
-  vec3 toF = pos - cameraPosition;
-  float dist = length(toF);
-  vec3 V = toF / max(dist, 0.001);
-  vec3 acc = vec3(0.0);
-  float reach = min(dist, range);
-  for (int i = 1; i <= 2; i++) {
-    vec3 p = cameraPosition + V * (reach * float(i) / 3.0);
-    vec3 toL = p - lp;
-    float ldn = length(toL);
-    vec3 L = toL / max(ldn, 0.001);
-    float spot = 1.0;
-    if (cosA > -0.2) spot = smoothstep(cosA, mix(cosA, 1.0, 0.4), dot(L, normalize(ld)));
-    float att = pow(clamp(1.0 - ldn / range, 0.0, 1.0), 1.5);
-    acc += lc * inten * spot * att;
-  }
-  return acc * 0.012;
+  float specPow = mix(12.0, 128.0, clamp(1.0 - rough, 0.0, 1.0));
+  float spec = pow(max(dot(N, H), 0.0), specPow) * (0.05 + wet * 1.65);
+  return lc * inten * spot * att * (albedo * diff + spec * vec3(1.0, 0.96, 0.9));
 }
 
 vec3 shade(vec3 pos, vec3 N, vec3 albedo, float rough, float wet){
@@ -232,22 +212,12 @@ vec3 shade(vec3 pos, vec3 N, vec3 albedo, float rough, float wet){
   col += lamp(pos, N, V, albedo, rough, wet, uLP5, uLD5, uLC5, uLRangeB.y, uLCosB.y, uLIntB.y);
   col += lamp(pos, N, V, albedo, rough, wet, uLP6, uLD6, uLC6, uLRangeB.z, uLCosB.z, uLIntB.z);
   col += lamp(pos, N, V, albedo, rough, wet, uLP7, uLD7, uLC7, uLRangeB.w, uLCosB.w, uLIntB.w);
-  col += volCone(pos, uLP0, uLD0, uLC0, uLRange.x, uLCos.x, uLInt.x);
-  col += volCone(pos, uLP1, uLD1, uLC1, uLRange.y, uLCos.y, uLInt.y);
   float rim = pow(1.0 - max(dot(N, V), 0.0), 3.0);
   col += uFogColor * rim * 0.22;
   float dist = length(cameraPosition - pos);
   float fog = 1.0 - exp(-uFogDensity * uFogDensity * dist * dist);
-  col = mix(col, uFogColor, clamp(fog, 0.0, 0.92));
+  col = mix(col, uFogColor, clamp(fog, 0.0, 0.86));
   return col;
-}
-
-vec3 grade(vec3 col){
-  col *= 1.18;
-  col = clamp((col * (2.51 * col + 0.03)) / (col * (2.43 * col + 0.59) + 0.14), 0.0, 1.0);
-  float l = dot(col, vec3(0.2126, 0.7152, 0.0722));
-  col *= mix(vec3(0.80, 0.93, 1.08), vec3(1.08, 1.0, 0.86), smoothstep(0.04, 0.5, l));
-  return pow(max(col, 0.0), vec3(0.4545));
 }
 `;
 
@@ -403,7 +373,7 @@ void main(){
     float bead = smoothstep(0.72, 0.92, n2(vWorld.xz * 3.5 + vWorld.yz * 0.4));
     col += vec3(0.85, 0.9, 1.0) * bead * wet * 0.35;
   }
-  gl_FragColor = vec4(grade(max(col, 0.0)), 1.0);
+  gl_FragColor = vec4(max(col, 0.0), 1.0);
 }
 `;
 
@@ -440,7 +410,7 @@ uniform vec3 uColor;
 uniform float uGain;
 void main(){
   vec3 col = uColor * uGain;
-  gl_FragColor = vec4(pow(max(col, 0.0), vec3(0.4545)), 1.0);
+  gl_FragColor = vec4(uColor * uGain, 1.0);
 }
 `;
 
@@ -510,7 +480,7 @@ export function createSky(field: NightField): THREE.Mesh {
         float flash = pow(max(dot(d, normalize(uLD1)), 0.0), 12.0) * uLInt.y;
         col += uLC0 * head * 0.05 + uLC1 * flash * 0.08;
         if (d.y < 0.0) col = mix(col, uFogColor * 0.72, clamp(-d.y * 4.0, 0.0, 1.0));
-        gl_FragColor = vec4(pow(max(col, 0.0), vec3(0.4545)), 1.0);
+        gl_FragColor = vec4(max(col, 0.0) * 1.35, 1.0);
       }
     `,
   });
@@ -543,8 +513,8 @@ void main(){
   if (d > 0.5) discard;
   float a = smoothstep(0.5, 0.12, d) * (1.0 - uIndoor * 0.94);
   if (a < 0.02) discard;
-  vec3 col = mix(vec3(0.78, 0.82, 0.86), uFogColor, vFog);
-  gl_FragColor = vec4(pow(col, vec3(0.4545)), a * (1.0 - vFog * 0.65));
+  vec3 col = mix(vec3(0.42, 0.46, 0.5), uFogColor, vFog);
+  gl_FragColor = vec4(col, a * (1.0 - vFog * 0.55));
 }
 `;
 
@@ -750,8 +720,8 @@ varying vec3 vWorld;
 void main(){
   float tw = 0.55 + 0.45 * sin(uTime * 1.7 + vWorld.z * 0.15);
   float on = step(0.2, fract(sin(vWorld.z * 12.3 + vWorld.y * 4.0) * 43758.5));
-  vec3 col = vec3(1.0, 0.68, 0.32) * tw * on * 1.4;
-  gl_FragColor = vec4(pow(max(col, 0.0), vec3(0.4545)), 1.0);
+  vec3 col = vec3(1.0, 0.52, 0.16) * tw * on * 3.2;
+  gl_FragColor = vec4(col, 1.0);
 }
 `;
 

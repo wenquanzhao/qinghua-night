@@ -8,7 +8,8 @@ import { formatClock } from './rules';
 import { loadSettings, saveSettings, type Settings } from './settings';
 import type { Chapter, Host, Report } from './types';
 import { Shell } from './ui';
-import { PROFILES, NightField, Snow, createPost, createSky, detectQuality, type QualityProfile } from '../render/night';
+import { Film } from '../render/film';
+import { PROFILES, NightField, Snow, createSky, detectQuality, type QualityProfile } from '../render/night';
 
 type Mode = 'title' | 'briefing' | 'playing' | 'paused' | 'interrupt' | 'boundary';
 type Overlay = 'title' | 'paused';
@@ -26,9 +27,7 @@ export class Game implements Host {
   private readonly snow: Snow;
   private readonly sky: THREE.Mesh;
   private readonly shell: Shell;
-  private readonly post: ReturnType<typeof createPost>;
-  private target: THREE.WebGLRenderTarget | null = null;
-  private targetSamples = -1;
+  private readonly film: Film;
   private chapter: Chapter | null = null;
   private chapterId = 'south-road';
   private entryKit: Kit | null = null;
@@ -60,7 +59,7 @@ export class Game implements Host {
     this.sky = createSky(this.night);
     this.snow = new Snow(this.night, 1400);
     this.scene.add(this.sky, this.snow.points);
-    this.post = createPost(this.night);
+    this.film = new Film(this.night);
     this.shell = new Shell(ui, {
       start: () => this.start(),
       depart: () => this.depart(),
@@ -266,26 +265,13 @@ export class Game implements Host {
     const cssH = Math.max(1, canvas.clientHeight || window.innerHeight);
     if (!force && this.sized.w === cssW && this.sized.h === cssH && this.sized.scale === profile.scale) return;
     this.sized = { w: cssW, h: cssH, scale: profile.scale };
-    const w = Math.max(1, Math.floor(cssW * profile.scale));
-    const h = Math.max(1, Math.floor(cssH * profile.scale));
     this.camera.aspect = cssW / cssH;
     this.camera.fov = this.settings.fov;
     this.camera.updateProjectionMatrix();
     this.snow.setCount(profile.snow);
-    if (profile.post) {
-      this.renderer.setSize(cssW, cssH, false);
-      if (!this.target || this.targetSamples !== profile.samples) {
-        this.target?.dispose();
-        this.target = new THREE.WebGLRenderTarget(w, h, { samples: profile.samples });
-        this.targetSamples = profile.samples;
-      } else this.target.setSize(w, h);
-    } else {
-      this.renderer.setSize(w, h, false);
-    }
-    const grain = this.post.material.uniforms.uGrain;
-    const vignette = this.post.material.uniforms.uVignette;
-    if (grain) grain.value = profile.grain;
-    if (vignette) vignette.value = profile.vignette;
+    this.renderer.setSize(cssW, cssH, false);
+    this.renderer.setPixelRatio(1);
+    this.film.resize(cssW, cssH, profile);
     this.night.uniforms.uDetail.value = profile.detail;
     this.night.uniforms.uVol.value = profile.vol;
   }
@@ -401,19 +387,6 @@ export class Game implements Host {
   }
 
   private render(): void {
-    const profile = this.quality;
-    if (profile.post && this.target) {
-      this.renderer.setRenderTarget(this.target);
-      this.renderer.render(this.scene, this.camera);
-      this.renderer.setRenderTarget(null);
-      const diffuse = this.post.material.uniforms.tDiffuse;
-      const damage = this.post.material.uniforms.uDamage;
-      if (diffuse) diffuse.value = this.target.texture;
-      if (damage) damage.value = this.damage;
-      this.renderer.render(this.post.scene, this.post.camera);
-    } else {
-      this.renderer.setRenderTarget(null);
-      this.renderer.render(this.scene, this.camera);
-    }
+    this.film.render(this.renderer, this.scene, this.camera, this.damage);
   }
 }

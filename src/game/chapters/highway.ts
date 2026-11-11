@@ -1181,10 +1181,10 @@ export class HighwayChapter implements Chapter {
       for (const side of [-1, 1]) {
         if (side < 0 && z > 124 && z < 150) continue;
         spots.push({
-          x: side * (7.3 + rand() * 1.4),
-          z: z + (rand() - 0.5) * 3,
+          x: side * (6.5 + rand() * 1.1),
+          z: z + (rand() - 0.5) * 2.4,
           ry: rand() * Math.PI,
-          s: 0.85 + rand() * 0.55,
+          s: 1.7 + rand() * 0.9,
         });
       }
     }
@@ -1229,6 +1229,31 @@ export class HighwayChapter implements Chapter {
       field,
       8,
     );
+    this.placeWreck(7.15, 24, 0.95, 0.35);
+    this.placeWreck(-7.4, 58, 0.95, -0.5);
+  }
+
+  private placeWreck(x: number, z: number, y: number, ry: number): void {
+    const group = new THREE.Group();
+    group.position.set(x, y, z);
+    group.rotation.y = ry;
+    group.rotation.z = 0.08;
+    const body = meshBox(this.lit, 1.7, 0.42, 3.6, 0x2a3036);
+    body.position.set(0, 0.48, 0);
+    const cabin = meshBox(this.lit, 1.45, 0.4, 1.3, 0x1a1e24);
+    cabin.position.set(0, 0.82, -0.35);
+    const glass = meshBox(this.lit, 1.3, 0.22, 0.06, 0x1a2832);
+    glass.position.set(0, 0.9, 0.25);
+    const snow = meshBox(this.lit, 1.2, 0.1, 1.5, 0xe7eef4);
+    snow.position.set(0, 1.08, -0.2);
+    const drift = meshBox(this.lit, 2.1, 0.22, 1.4, 0xd5e0e8);
+    drift.position.set(0.15, 0.1, -1.1);
+    tagMode(body, this.host.night, 8);
+    tagMode(cabin, this.host.night, 8);
+    tagMode(snow, this.host.night, 2);
+    tagMode(drift, this.host.night, 2);
+    group.add(body, cabin, glass, snow, drift);
+    this.root.add(group);
   }
 
   private addPoles(): void {
@@ -1256,23 +1281,29 @@ export class HighwayChapter implements Chapter {
   }
 
   private addFarBank(): void {
-    for (let i = 0; i < 7; i++) {
-      const height = 5 + (i % 3) * 4;
-      const block = meshBox(this.lit, 7, height, 9, 0x14181d);
-      block.position.set(38 + (i % 2) * 10, height / 2, i * 32 - 8);
-      this.root.add(block);
-    }
-    const geo = new THREE.PlaneGeometry(0.7, 0.9);
-    const mesh = new THREE.InstancedMesh(geo, windowMaterial(this.host.night), 28);
+    const geo = new THREE.PlaneGeometry(0.62, 0.85);
+    const mesh = new THREE.InstancedMesh(geo, windowMaterial(this.host.night), 160);
     const dummy = new THREE.Object3D();
     let n = 0;
     for (let i = 0; i < 7; i++) {
-      for (let row = 0; row < 4; row++) {
-        dummy.position.set(34.2, 2.2 + row * 1.3, i * 32 - 6);
-        dummy.lookAt(0, dummy.position.y, dummy.position.z);
-        dummy.updateMatrix();
-        mesh.setMatrixAt(n, dummy.matrix);
-        n += 1;
+      const height = 6 + (i % 3) * 5;
+      const x = 22 + (i % 2) * 8;
+      const z = i * 28 + 6;
+      const block = meshBox(this.lit, 6.5, height, 8, 0x12161c);
+      block.position.set(x, height / 2, z);
+      const cap = meshBox(this.lit, 6.7, 0.16, 8.2, 0xe4eef4);
+      cap.position.set(x, height + 0.05, z);
+      tagMode(cap, this.host.night, 2);
+      this.root.add(block, cap);
+      const face = x - 3.3;
+      for (let row = 0; row < 4 && n < 160; row++) {
+        for (let col = 0; col < 4 && n < 160; col++) {
+          dummy.position.set(face, 1.6 + row * (height / 5.2), z - 2.4 + col * 1.5);
+          dummy.lookAt(0, dummy.position.y, dummy.position.z);
+          dummy.updateMatrix();
+          mesh.setMatrixAt(n, dummy.matrix);
+          n += 1;
+        }
       }
     }
     mesh.count = n;
